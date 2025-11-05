@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Stream - Foot Traffic Analysis</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f8;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .video-container {
+            position: relative;
+            width: 100%;
+            margin: 0 auto;
+            text-align: center;
+        }
+        .video-stream {
+            max-width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .stats-panel {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        .stats-row {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .stats-item {
+            flex: 1;
+            min-width: 200px;
+            padding: 10px;
+            background-color: #fff;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+        .stats-item strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .btn {
+            display: inline-block;
+            padding: 8px 16px;
+            margin: 5px;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        .btn:hover {
+            background-color: #45a049;
+        }
+        .error-message {
+            color: red;
+            text-align: center;
+            margin: 10px 0;
+            padding: 10px;
+            background: #fff;
+            border: 1px solid #ffcdd2;
+            border-radius: 4px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Foot Traffic Video Analysis</h1>
+        
+        <div class="video-container">
+            <div id="error-message" class="error-message"></div>
+            <img id="video-stream" src="{{ url_for('video_feed') }}" class="video-stream" alt="Video Stream" onerror="handleVideoError()">
+        </div>
+        
+        <div class="stats-panel">
+            <h2>Live Statistics</h2>
+            <div class="stats-row">
+                <div class="stats-item">
+                    <strong>Location:</strong>
+                    <span id="location">Loading...</span>
+                </div>
+                <div class="stats-item">
+                    <strong>People Count:</strong>
+                    <span id="people-count">Loading...</span>
+                </div>
+                <div class="stats-item">
+                    <strong>Average Dwell Time:</strong>
+                    <span id="dwell-time">Loading...</span>
+                </div>
+            </div>
+            
+            <div class="stats-row">
+                <div class="stats-item">
+                    <strong>Date:</strong>
+                    <span id="date">Loading...</span>
+                </div>
+                <div class="stats-item">
+                    <strong>Time:</strong>
+                    <span id="time">Loading...</span>
+                </div>
+                <div class="stats-item">
+                    <strong>Day:</strong>
+                    <span id="day">Loading...</span>
+                </div>
+            </div>
+        </div>
+        
+        <p>
+            <a href="/upload" class="btn">Analyze Another Video</a>
+            <a href="/" class="btn" style="background-color: #666;">Back to Home</a>
+            <a href="/download_stats" class="btn" style="background-color: #0275d8;">Download Statistics</a>
+        </p>
+    </div>
+
+    <script>
+        let retryCount = 0;
+        const maxRetries = 5;  // Increased max retries
+        const retryDelay = 3000;  // 3 seconds between retries
+        
+        function handleVideoError() {
+            const errorDiv = document.getElementById('error-message');
+            const videoImg = document.getElementById('video-stream');
+            
+            errorDiv.style.display = 'block';
+            
+            // First check stream status
+            fetch('/api/stream-status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        errorDiv.textContent = `Stream error: ${data.error}`;
+                        return;
+                    }
+                    
+                    if (!data.isReady) {
+                        errorDiv.textContent = 'Stream is initializing. Please wait...';
+                        return;
+                    }
+                    
+                    // If stream should be ready but we got an error, try to reconnect
+                    if (retryCount < maxRetries) {
+                        errorDiv.textContent = `Video stream interrupted. Attempting to reconnect... (${retryCount + 1}/${maxRetries})`;
+                        retryCount++;
+                        
+                        // Try to reconnect after a delay
+                        setTimeout(() => {
+                            videoImg.src = `/video_feed?t=${new Date().getTime()}`;
+                        }, retryDelay);
+                    } else {
+                        errorDiv.textContent = 'Unable to connect to video stream. Please refresh the page or try again later.';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking stream status:', error);
+                    errorDiv.textContent = 'Error checking stream status. Please refresh the page.';
+                });
+        }
+        
+        function updateStats() {
+            fetch('/api/stats')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch stats');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    document.getElementById('location').textContent = data.location || 'N/A';
+                    document.getElementById('people-count').textContent = data.people_count || '0';
+                    document.getElementById('dwell-time').textContent = 
+                        data.avg_dwell_time ? `${data.avg_dwell_time.toFixed(1)} seconds` : '0 seconds';
+                    
+                    if (data.timestamp) {
+                        const timestamp = new Date(data.timestamp);
+                        document.getElementById('date').textContent = timestamp.toLocaleDateString();
+                        document.getElementById('time').textContent = timestamp.toLocaleTimeString();
+                        document.getElementById('day').textContent = timestamp.toLocaleDateString('en-US', { weekday: 'long' });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error updating stats:', error);
+                    // Don't update the display on error to keep last known good values
+                });
+        }
+        
+        // Check stream status initially
+        fetch('/api/stream-status')
+            .then(response => response.json())
+            .then(data => {
+                const errorDiv = document.getElementById('error-message');
+                if (data.error) {
+                    errorDiv.style.display = 'block';
+                    errorDiv.textContent = `Stream error: ${data.error}`;
+                }
+            })
+            .catch(error => console.error('Error checking initial stream status:', error));
+        
+        // Update stats immediately and then every second
+        updateStats();
+        const statsInterval = setInterval(updateStats, 1000);
+        
+        // Reset retry count when the video loads successfully
+        document.getElementById('video-stream').onload = function() {
+            retryCount = 0;
+            document.getElementById('error-message').style.display = 'none';
+        };
+        
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            clearInterval(statsInterval);
+        });
+    </script>
+</body>
+</html>
