@@ -1,4 +1,4 @@
-const OPENROUTER_API_URL = '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';
+const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 interface AIResponse {
   success: boolean;
@@ -37,7 +37,7 @@ export async function generateForecastInterpretation(locationData: {
         'HTTP-Referer': window.location.origin,
       },
       body: JSON.stringify({
-        model: 'mistralai/mistral-7b-instruct', // You can change this to other models
+        model: 'mistralai/mistral-7b-instruct',
         messages: [
           {
             role: 'user',
